@@ -14,92 +14,12 @@
 		// root[_modname] = factory(root._, root.IO, root.firebase); // Plain JS, "rtl" is in window scope
 	}
 }(this, function(_, IO) {
-//=========================
 
-// // STUB FOR DEBUGGING
-// if (typeof define !== "function" || !define.amd) {
-// 	define = function (ignore, modfunc) {
-// 		if (typeof IO === 'undefined')
-// 			throw new Error('Reqires IO module!');
-// 		MODULES.io_middleware = modfunc(
-// 			_, 
-// 			IO,
-// 			MODULES.endpointscfg,
-// 			MODULES.config
-// 			);
-// 		IO = MODULES.io_middleware;
-// 	}
-// }
-
-
-// define([
-// 	'underscore.all', 
-// 	'shared/io', // <--  
-// 	'shared/config',
-
-// 	'shared/io.firebase'
-// ], 
-
-// function (_, IO, config) {
-
-	// self._url_ = function(path, StorageID){
-	// 	return (StorageID != null) ? path + '/' + StorageID.toLowerCase() : path; // to-do: resolve to abs url
-	// };
-	// ep->transport->request.
 
 	var 
 		mandatory = _.assertDefined;
 
 
-	// /**
-	//  * Bundle of transport and endpoint.
-	//  * Final object, for instantiation only (not for inheritance)
-	//  * @method Service
-	//  * @param  {Endpoint} endpoint       [description]
-	//  * @param  {Transport} transport [description]
-	//  * @return {object}           [description]
-	//  */
-	
-	// function Service (endpoint, transport) {
-	// 	var 
-	// 		self = {
-	// 			'endpoint': mandatory(endpoint, 'Service requires defined "endpoint"'), 
-	// 			'transport': mandatory(transport, 'Service requires defined "transport"')
-	// 		};
-	// 	// console.log('Service has transport: ', transport);
-
-	// 	return _.extend(self, {
-	// 		/**
-	// 		 * [description]
-	// 		 * @method
-	// 		 * @param  {[type]} args [description]
-	// 		 * @return {Promise{user?}}      [description]
-	// 		 */
-	// 		'signIn': function (args) {
-	// 			// DEV only !!!
-	// 			return self.transport.signIn(args)},
-
-	// 		'signOut': function (args) {return self.transport.signOut()},
-
-	// 		'child': function (urn) {
-	// 			return Service(self.endpoint.child(urn), self.transport)},
-
-	// 		'create': function(rqOptions, data) {
-	// 			return self.endpoint.create(self.transport, rqOptions, data)},
-
-	// 		'update': function(rqOptions, data) {
-	// 			return self.endpoint.update(self.transport, rqOptions, data)},
-
-	// 		'read': function(rqOptions) {
-	// 			return self.endpoint.read(self.transport, rqOptions)},
-
-	// 		'delete': function(rqOptions) {
-	// 			return self.endpoint.delete(self.transport, rqOptions)},
-
-	// 		'query': function(rqOptions) {
-	// 			return self.endpoint.query(self.transport, rqOptions)}
-	// 	})
-	// }
 
 
 	/**
@@ -108,7 +28,7 @@
 	 * @param  {[type]}            svc [description]
 	 */
 
-	 // !!!! CollectionInterface is absolete now!
+	 // !!!! CollectionInterface is absolete now?
 
 	function CollectionInterface(svc) {
 		var self = {
@@ -399,7 +319,7 @@
 	function UserCtx(data) {
 		data = data || {};
 		this.isLocked = data.isLocked || false;
-		this.isAdmin = data.isAdmin || true;
+		this.isAdmin = data.isAdmin || false;
 	}
 
 	/**

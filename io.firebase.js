@@ -200,9 +200,10 @@ To-do:
 					return _.extend(rqOptions || {}, {
 						'pathArgs': {
 							'userId': userId,
-							'userEmail': email
+							'userEmail': userEmail
 						}
 					});
+					console.warn('applyCredentials >>>', userEmail);
 					// return rqOptions;
 				} 
 				throw new FirebaseAuthError('Not authorized to perform request!');
@@ -304,6 +305,10 @@ To-do:
 					return _auth.createUserWithEmailAndPassword(args.email, args.password)
 				}
 				return Promise.reject('createUser: invalid arguments!');
+			},
+
+			'deleteCurrentUser': function () {
+				return _auth.currentUser.delete()
 			},
 
 			'updateEmail': function (newValue) {
