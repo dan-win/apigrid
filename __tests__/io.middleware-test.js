@@ -1,14 +1,14 @@
 'use strict'
 jest.unmock('../../../vendor/underscore-min');
 // jest.unmock('../../../vendor/es6-promise-min');
-jest.unmock('../underscore.ext');
+jest.unmock('underscore.ext');
 jest.unmock('../io'); // unmock to use the actual implementation of sum
 jest.unmock('../io.middleware'); // unmock to use the actual implementation of sum
 
 
 // const Promise = require('../../../vendor/es6-promise-min').Promise;
 window._ = require('../../../vendor/underscore-min');
-window._ = require('../underscore.ext');
+window._ = require('underscore.ext');
 window.IO = require('../io');
 
 //console.log('createExceptionClass:::', typeof _.createExceptionClass);

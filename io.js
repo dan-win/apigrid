@@ -35,14 +35,16 @@ Implement "filterCollection" method
 		if (typeof define === "function" && define.amd) { // AMD mode
 			define(["underscore.all", "json2"], factory);
 		} else if (typeof exports === "object") { // CommonJS mode
-			window._ = (typeof window._ === 'undefined') ? require("underscore.all") : window._;
-			var JSON = (typeof window.JSON === 'undefined') ? require("json2") : window.JSON;
-			module.exports = factory(_, JSON);
+			var _ = require("underscore.all");
+			require("json2");
+			module.exports = factory(_);
 		} else {
-			root[_modname] = factory(root._, root.JSON); // Plain JS, "rtl" is in window scope
+			// ...
+			root[_modname] = factory(root._); // Plain JS, "rtl" is in window scope
 		}
-	}(this, function(_, JSON) {
-		// body...
+	}(this, function(_) {
+
+		var TRACE_MODULE = false;		
 
 		var 
 			mandatory = _.assertDefined,
@@ -194,9 +196,9 @@ Implement "filterCollection" method
 
 					// Apply Auth here... applyCredentials sets up pathArgs, qryArgs
 					if (_auth) { 
-						console.log('auth found, calling', _auth);
+						if (TRACE_MODULE) console.log('auth found, calling', _auth);
 						o = _auth.applyCredentials(o);
-						console.log('credentials applied: ', o)
+						if (TRACE_MODULE) console.log('credentials applied: ', o)
 					}
 
 					// _urn 		= (o.pathArgs) ? self._resolveUrn(o.pathArgs) : self._urn;

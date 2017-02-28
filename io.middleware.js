@@ -5,19 +5,23 @@
 	if (typeof define === "function" && define.amd) { // AMD mode
 		define(["underscore.all", "shared/io"], factory);
 	} else if (typeof exports === "object") { // CommonJS mode
-		var _ = (typeof window._ === 'undefined') ? require("underscore.all") : window._;
-		var IO = (typeof window.IO === 'undefined') ? require("shared/io") : window.IO;
+		var _ = require("underscore.all");
+		var IO = require("shared/io");
 		module.exports = factory(_, IO);
 	} else {
-	// This module extends "IO" (which already exists as a global variable)
+		// ...
+		// This module extends "IO" (which already exists as a global variable)
 		factory(root._, root.IO); // Plain JS, "rtl" is in window scope
 		// root[_modname] = factory(root._, root.IO, root.firebase); // Plain JS, "rtl" is in window scope
 	}
 }(this, function(_, IO) {
 
 
-	var 
+	var
 		mandatory = _.assertDefined;
+
+	var
+		ReflectionLockError = _.createExceptionClass('IO.ReflectionLockError', IO.BaseError);
 
 
 
@@ -67,6 +71,32 @@
 		})
 	}
 
+
+	function PropertyReflection(svc) {
+		var _svc = svc || {};
+		var self = {
+			endpoint: _svc.endpoint,
+			transport: _svc.transport
+		}
+		return _.extend(self, {
+			/*
+			Methods
+			*/
+			'load': function (rqOptions) {
+				var ep = self._resolveEndpoint(objItem)
+					,tsp = self.transport;
+				return ep.read(tsp, rqOptions) // extract raw value
+			},
+
+			// NOTE: item cannot create itself unless "urn" points to its location with ID in REST-like systems
+			'save': function (rqOptions, data) {
+				var ep = self._resolveEndpoint(objItem)
+					,tsp = self.transport;
+				return ep.create(tsp, rqOptions, data)
+			}
+		})
+	}
+
 	// To work with a custom Object - instantiate ObjectReflection
 	// and setup main methods
 	// To implement template - instantiate with ObjectReflection(null),
@@ -78,6 +108,10 @@
 	function ObjectReflection(svc) {
 		var _svc = svc || {};
 
+		var _dummyPromise = function (arg) {
+			return Promise.resolve(arg)
+		}
+
 		var self = {
 			endpoint: _svc.endpoint,
 			transport: _svc.transport,
@@ -87,7 +121,17 @@
 				// encode object:
 				toJS: function (obj) {return obj},
 				// update object attrs from data:
-				fromJS: function (obj, data) {return _.extend(obj, data)}
+				fromJS: function (obj, data) {return _.extend(obj, data)},
+
+				onAfterLoad: _dummyPromise,
+
+				onBeforeSave: _dummyPromise,
+				onAfterSave: _dummyPromise,
+				onBeforeUpdate: _dummyPromise,
+				onAfterUpdate: _dummyPromise,
+				onBeforeRemove: _dummyPromise,
+				onAfterRemove: _dummyPromise
+
 			}
 		}
 
@@ -112,43 +156,103 @@
 			'toJS': function (method) {self._methods.toJS = method; return self},
 			'fromJS': function (method) {self._methods.fromJS = method; return self},
 
+			'onAfterLoad': function (method) {self._methods.onAfterLoad = method || _dummyPromise; return self},
+
+			'onBeforeSave': function (method) {self._methods.onBeforeSave = method || _dummyPromise; return self},
+			'onAfterSave': function (method) {self._methods.onAfterSave = method || _dummyPromise; return self},
+			'onBeforeUpdate': function (method) {self._methods.onBeforeUpdate = method || _dummyPromise; return self},
+			'onAfterUpdate': function (method) {self._methods.onAfterUpdate = method || _dummyPromise; return self},
+			'onBeforeRemove': function (method) {self._methods.onBeforeRemove = method || _dummyPromise; return self},
+			'onAfterRemove': function (method) {self._methods.onAfterRemove = method || _dummyPromise; return self},
+
 			/*
 			Methods
 			*/
 			'load': function (objItem, rqOptions) {
 				var ep = self._resolveEndpoint(objItem)
-					,tsp = self.transport;
+					,tsp = self.transport
+					,item = objItem, opts = rqOptions;
+				var postProcessResponse = function () {
+					return self._methods.onAfterLoad(item, opts)
+				}
 				return ep.read(tsp, rqOptions) // extract raw object
 					.then(function (response) { // transform it - update original objItem
-						return self._methods.fromJS(objItem, response)
+						return (response === null) ? null : self._methods.fromJS(item, response)
 					})
+					.then(postProcessResponse)
 			},
 
 			// NOTE: item cannot create itself unless "urn" points to its location with ID in REST-like systems
-			'save': function (objItem, rqOptions, data) {
-				var ep = self._resolveEndpoint(objItem)
-					,tsp = self.transport
-					,data = self._methods.toJS(objItem);
-				return ep.create(tsp, rqOptions, data)
+			'save': function (objItem, rqOptions) {
+				var item = objItem, opts = rqOptions;
+				var request = function () {
+					var ep = self._resolveEndpoint(item)
+						,tsp = self.transport
+						,data = self._methods.toJS(item);
+					return ep.create(tsp, opts, data)
+				}
+				var startTransaction = function () {
+					return self._methods.onBeforeSave(item, opts)
+				}
+				var endTransaction = function () {
+					return self._methods.onAfterSave(item, opts)
+				}
+				return startTransaction()
+					.then(request)
+					.then(endTransaction)
 			},
 
-			'update': function (objItem, rqOptions, data) {
-				var ep = self._resolveEndpoint(objItem)
-					,tsp = self.transport
-					,data = self._methods.toJS(objItem);
-				return ep.update(tsp, rqOptions, data)
+			'update': function (objItem, rqOptions) {
+				var item = objItem, opts = rqOptions;
+				var request = function () {
+					var ep = self._resolveEndpoint(item)
+						,tsp = self.transport
+						,data = self._methods.toJS(item);
+					return ep.update(tsp, opts, data)
+				}
+				var startTransaction = function () {
+					return self._methods.onBeforeUpdate(item, opts)
+				}
+				var endTransaction = function () {
+					return self._methods.onAfterUpdate(item, opts)
+				}
+				return startTransaction()
+					.then(request)
+					.then(endTransaction)
 			},
 
 			'remove': function (objItem, rqOptions) {
-				var ep = self._resolveEndpoint(objItem)
-					,tsp = self.transport
-				return ep.delete(tsp, rqOptions) // note - this can work if transport can remove obj by assigning NULL
+				var item = objItem, opts = rqOptions;
+				var request = function () {
+					var ep = self._resolveEndpoint(item)
+						,tsp = self.transport
+					return ep.delete(tsp, opts) // note - this can work if transport can remove obj by assigning NULL
+				}
+				var startTransaction = function () {
+					return self._methods.onBeforeRemove(item, opts)
+				}
+				var endTransaction = function () {
+					return self._methods.onAfterRemove(item, opts)
+				}
+				return startTransaction()
+					.then(request)
+					.then(endTransaction)
 			},
 
 			'query': function (objItem, rqOptions) {
 				var ep = self._resolveEndpoint(objItem)
 					,tsp = self.transport
 				return ep.query(tsp, rqOptions)
+			},
+
+			'propertyReflection': function (name) {
+				var ep = self._resolveEndpoint(objItem).child(name)
+					,tsp = self.transport
+				return PropertyReflection(Service(ep, tsp))
+			},
+
+			'spawnService': function () {
+				return IO.Service(self.endpoint, self.transport)
 			}
 
 		});
@@ -171,10 +275,11 @@
 				}
 		})
 
-		var _newItemFactory = function (data) {
+		var _newItemFactory = function (data, key) {
 			// decode data from stream and create new item instance
-			var instance = self._methods.itemFactory() // <--- what to pass into constructor???
-			return self._methods.fromJS(instance, data)
+			var instance = self._methods.itemFactory(data, key) // <--- what to pass into constructor???
+			return instance;
+			// return self._methods.fromJS(instance, data)
 		}
 
 		return _.extend(self, {
@@ -240,7 +345,7 @@
 			'create': function(urn, rqOptions, data) {
 				// Here data can contain 'uploadData' attribute which is a BLOB to upload
 				// another fields are metadata attributes?
-				var file = data.file;
+				// var file = data.file;
 				var metadata = data.metadata;
 				mandatory(data.uploadData, 'The upload task requires "uploadData" attribute in "data"!')
 				mandatory(data.metadata, 'The upload task requires "metadata" attribute which defines hosting rules for media')
@@ -281,7 +386,7 @@
 					return self.dataTransport.update(urn, rqOptions, data)
 				}
 				// route metadata between storages
-				if (data.metadata) return self.blobTransport.update(urn, rqOptions, data).then(updateDataStorage); 
+				if (data.metadata) return self.blobTransport.update(urn, rqOptions, data).then(updateDataStorage);
 				return updateDataStorage()
 			},
 
@@ -301,10 +406,10 @@
 				return self.dataTransport.query(urn, rqOptions)
 			}
 
-		})		
+		})
 	}
 
-	
+
 
 	//=====================================================
 	// Auth
@@ -347,7 +452,7 @@
 	 * @factory Auth
 	 * @param  {object} options Contains attributes: user, onAuthStateChanged, endpoint, transport (all are optional)
 	 */
-	
+
 	function Auth(options) {
 		var _data = options || {};
 		// set attributes here:
@@ -356,23 +461,25 @@
 			_onAuthStateChanged: _data.onAuthStateChanged || null,
 		}
 
+		self._rtti = 'Class:Auth'
+
 		// set methods here:
 		return _.extend(self, {
 			/**
-			 * Set up pre-defined attributes of the request options 
-			 * (pathArgs and/or qryArgs or, optionally, http headers:) in accordance with selected URL scheme: 
-			 * user info in path or user info in query argument of URL. 
+			 * Set up pre-defined attributes of the request options
+			 * (pathArgs and/or qryArgs or, optionally, http headers:) in accordance with selected URL scheme:
+			 * user info in path or user info in query argument of URL.
 			 * @method applyCredentials
 			 * @param  {[type]}         rqOptions [description]
 			 * @return {object}                   Modified request options
 			 */
-			// To-do: Applying Auth in Endpoint: make smart, distinguish betwee Endpoint and Transport 
+			// To-do: Applying Auth in Endpoint: make smart, distinguish betwee Endpoint and Transport
 
 			'applyCredentials': function (rqOptions) {
 				// By default: do not modify anything in options but check that user is signed in:
 				if (self.user) {
 					return rqOptions;
-				} 
+				}
 				throw new AuthError('Not authorized to perform request!');
 			},
 
@@ -392,6 +499,10 @@
 
 			'retriveSession': function () {
 				return Promise.resolve(self.user);
+			},
+
+			'throwOnExpired': function (response) {
+				return Promise.reject(new AuthError('Basic Auth does not support sessions!'))
 			},
 
 			'isSigned': function () {
@@ -428,9 +539,9 @@
 			data "routing" - by CollectionInterface
 
 			only "admins" have option to create users,
-			only "curren user" can change his email and password 
+			only "curren user" can change his email and password
 
-			[...extend Transport - it must use internal chech auth.allows(operation) before...] 
+			[...extend Transport - it must use internal chech auth.allows(operation) before...]
 
 			Maximum amount of data must be stored in "managed" database
 
@@ -446,7 +557,7 @@
 			all these methods can be hidden inside ..._updateUser()
 
 			for specific implementations where some operations not supported - reject promises or raise errors
-	
+
 
 			@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@*/
 
@@ -570,7 +681,7 @@
 
 	// 			return self._readUser(key, rqOptions)
 	// 				.then(function (rawUser) {
-	// 					if (ci) { // read custom data from 
+	// 					if (ci) { // read custom data from
 	// 						return ci.load(key, rqOptions)
 	// 							.then(function (extUser) {
 	// 								return _.extend(rawUser, extUser)
@@ -619,7 +730,7 @@
 	3. Services (by alias/entity)
 	Returns: services (by alias)
 	 */
-	
+
 
 	return _.extend(IO, {
 		// 'Service': Service,
@@ -631,7 +742,10 @@
 		'MultiMediaDispatcher': MultiMediaDispatcher,
 
 		'User': User,
+		'UserCtx': UserCtx,
 		'Auth': Auth,
+		// default factory for Auth:
+		'AuthFactory': Auth,
 
 		'AuthError': AuthError
 	});

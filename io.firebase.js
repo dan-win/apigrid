@@ -5,7 +5,7 @@ To-do:
 1. Exceptions in all methods which return promises: rewrite "throw" to "reject"
 2. Create base class FirebaseDataService and move all common methods of FirebaseStorage and FirebaseDB to it (FirebaseDB is not descendant of FirebaseStorage!).
 3. metadata - move "main" attributes directly in "data" namespace
-4. MEDIATED attributes for Storage/CDN data: 
+4. MEDIATED attributes for Storage/CDN data:
 * rscLink
 * size
 * contentType
@@ -21,9 +21,9 @@ To-do:
 	if (typeof define === "function" && define.amd) { // AMD mode
 		define(["underscore.all", "shared/io.middleware", "firebase"], factory);
 	} else if (typeof exports === "object") { // CommonJS mode
-		var _ = (typeof window._ === 'undefined') ? require("underscore.all") : window._;
-		var IO = (typeof window.IO === 'undefined') ? require("io.middleware") : window.IO;
-		var firebase = (typeof window.firebase === 'undefined') ? require("firebase") : window.firebase;
+		var _ = require("underscore.all");
+		var IO = require("shared/io.middleware");
+		var firebase = require("firebase");
 		module.exports = factory(_, IO, firebase);
 	} else {
 	// This module extends "IO" (which already exists as a global variable)
@@ -32,7 +32,10 @@ To-do:
 	}
 }(this, function(_, IO, firebase) {
 
-	var 
+	var _isRemoteAuth = !_.getQueryVariable('local-auth');
+	if (_.getQueryVariable('local-auth')) console.log('...local-auth mode...', _.getQueryVariable('local-auth'));
+
+	var
 		mandatory = _.assertDefined,
 		isFunction = _.isFunction,
 		isNull = _.isNull,
@@ -44,7 +47,7 @@ To-do:
 		Exception = _.Exception,
 		createExceptionClass = _.createExceptionClass,
 		raise = _.raise,
-		
+
 		deepClone = _.deepClone,
 		deepExtend = _.deepExtend,
 		replaceDefinedProps = _.replaceDefinedProps,
@@ -54,7 +57,7 @@ To-do:
 
 	if (!firebase) {
 		firebase = window.firebase;
-		console.log('GLOBAL FIREBASE: ');
+		//~console.log('GLOBAL FIREBASE: ');
 	}
 
 
@@ -100,7 +103,7 @@ To-do:
 	 */
 	function initFirebaseApp(config, appName) {
 		var
-			apiKey = assertDefined(config.apiKey, 
+			apiKey = assertDefined(config.apiKey,
 				'Firebase IO error: no apiKey in config!'),
 			running = activeApps[appName || apiKey],
 			appInstance;
@@ -144,6 +147,7 @@ To-do:
 	 */
 	FirebaseAuth.__base_factory__ = IO.Auth;
 	function FirebaseAuth(options, appName) {
+		//~console.log('...FirebaseAuth...')
 		var fbConfig = options;
 		var _firebase = initFirebaseApp(fbConfig, appName);
 		var _auth = _firebase.auth();
@@ -156,6 +160,7 @@ To-do:
 		// uses same "protocol" as IO.Auth:
 		var self = FirebaseAuth.__base_factory__({'user': _auth.currentUser});
 
+		self._rtti = 'Class:FirebaseAuth'
 		// use .init() or arguments in the factory?:
 
 		// self._firebase = _firebase;
@@ -167,11 +172,12 @@ To-do:
 
 		// Set listener:
 		_auth.onAuthStateChanged(function (fbUser) {
+			//~console.log('...onAuthStateChanged...', fbUser, _auth.currentUser)
 			// Update user attribute:
 			self.user = _getUser(fbUser);
 			// Call initial notification channel:
 			if (_isRetrievingSession) {
-				console.log('Auth:session is retrieved!', fbUser)
+				//~console.log('Auth:session is retrieved!', fbUser)
 				_isRetrievingSession = false;
 				if (_resolveInitialState) {
 					_resolveInitialState(self.user);
@@ -185,17 +191,17 @@ To-do:
 		// set methods here:
 		return _.extend(self, {
 			/**
-			 * Set up pre-defined attributes of the request options 
-			 * (pathArgs and/or qryArgs or, optionally, http headers:) in accordance with selected URL scheme: 
-			 * user info in path or user info in query argument of URL. 
+			 * Set up pre-defined attributes of the request options
+			 * (pathArgs and/or qryArgs or, optionally, http headers:) in accordance with selected URL scheme:
+			 * user info in path or user info in query argument of URL.
 			 * @method applyCredentials
 			 * @param  {[type]}         rqOptions [description]
 			 * @return {object}                   Modified request options
 			 */
 			'applyCredentials': function (rqOptions) {
 				// By default: modify path:
-				var userId = self.user && self.user.uid;
-				var userEmail = self.user && self.user.email;
+				var userId = self.user && self.user.uid || null;
+				var userEmail = self.user && self.user.email || null;
 				if (userId) {
 					return _.extend(rqOptions || {}, {
 						'pathArgs': {
@@ -205,7 +211,7 @@ To-do:
 					});
 					console.warn('applyCredentials >>>', userEmail);
 					// return rqOptions;
-				} 
+				}
 				throw new FirebaseAuthError('Not authorized to perform request!');
 			},
 
@@ -215,7 +221,7 @@ To-do:
 					return Promise.resolve(self.user);
 				}
 				if (typeof credentials === 'string') {
-					// Token 
+					// Token
 					var token = credentials;
 					p = _auth.signInWithCustomToken(token)
 				} else if (credentials.email) {
@@ -226,7 +232,7 @@ To-do:
 				}
 
 				return p.then(function (response) {
-					return _getUser(_auth.currentUser); 
+					return _getUser(_auth.currentUser);
 				}).catch(function(error) {
 					var errorCode = error.code;
 					var errorMessage = error.message;
@@ -242,18 +248,19 @@ To-do:
 			},
 
 
-			/**	
-			waits until first call of .onAuthStateChanged, 
-			after that .user and it is possible to use .retrieveToken			
+			/**
+			waits until first call of .onAuthStateChanged,
+			after that .user and it is possible to use .retrieveToken
 			*/
 			'retriveSession':  function () {
+				//~console.log('...retriveSession...')
 				if (_isRetrievingSession) {
-					console.log('Auth:retriveSession')
+					//~console.log('Auth:retriveSession')
 					return new Promise(function (resolve, reject) {
 						_resolveInitialState = resolve;
 						// watchdog
 						setTimeout(function () {
-							if (_resolveInitialState) { 
+							if (_resolveInitialState) {
 								_isRetrievingSession = false;
 								_resolveInitialState(self.user);
 								_resolveInitialState = null;
@@ -266,18 +273,22 @@ To-do:
 			},
 
 			'throwOnExpired': function (response) {
+				//~console.log('...throwOnExpired...');
 				if (self.user) {
+					//~console.log('throwOnExpired: user found', self.user, _auth.currentUser)
 					return Promise.resolve(response);
 				}
 				else {
+					//~console.log('throwOnExpired: user NOT found', self.user, _auth.currentUser)
 					return Promise.reject(new FirebaseAuthError('Session expired!'));
 				}
 			},
 
 			'retriveToken': function () {
 				var _fbUser = _auth.currentUser;
-				if (_fbUser) return _fbUser.getToken()
+				if (_fbUser && _isRemoteAuth) return _fbUser.getToken()
 					.then(function (token) {
+						//~console.log('...retrieveToken...Ok');
 						self.activeToken = token;
 						return self;
 					})
@@ -304,7 +315,7 @@ To-do:
 				if (args.email) {
 					return _auth.createUserWithEmailAndPassword(args.email, args.password)
 				}
-				return Promise.reject('createUser: invalid arguments!');
+				return Promise.reject(new FirebaseAuthError('createUser: invalid arguments - no email specified!'));
 			},
 
 			'deleteCurrentUser': function () {
@@ -321,6 +332,7 @@ To-do:
 
 			'updateProfile': function (newValue) {
 				var args = _.pick(newValue, 'displayName', 'photoUrl')
+				//~console.log('FirebaseAuth.updateProfile', newValue, args)
 				return _auth.currentUser.updateProfile(args);
 			}
 
@@ -350,13 +362,13 @@ To-do:
 			_url = url.match(/\:/g) ? url.split(':').pop() : url,
 			self = IO.Transport(_url.replace(/^\/+/g, ''), options);
 
-		console.log('Create FirebaseStorage Instance...');
+		//~console.log('Create FirebaseStorage Instance...');
 
 		// Firebase initialization:
 		self.init = function(fbConfig, appName) {
-			self._fbConfig = assertDefined(fbConfig, 
+			self._fbConfig = assertDefined(fbConfig,
 				'Firebase config attribute is missed in the transport.init(fbConfig) call!');
-			assertDefined(fbConfig.storageBucket, 
+			assertDefined(fbConfig.storageBucket,
 				'Firebase Storage requires "storageBucket" attribute in fbConfig!');
 			self._firebase = initFirebaseApp(fbConfig, appName);
 
@@ -374,18 +386,18 @@ To-do:
 
 		self._defErrorClass = FirebaseStorageError;
 
-		// Override the inherited method (any arguments for URN are mapped in "/path/:arg/..." form, not in http-like "...?arg=value&...")		
+		// Override the inherited method (any arguments for URN are mapped in "/path/:arg/..." form, not in http-like "...?arg=value&...")
 
 
 		self._resolveUri = function (urn, qryArgs, rqOptions) {
-			var 
+			var
 				_location = self.url().replace(/[\/]+$/g, ''),
 				_urn = urn.replace(/^[\/]+/g, '');
 			// Ignore qryArgs here:
 			// if (qryArgs) {
 			// 	_urn = [_urn, '?', serializeUriVariables(qryArgs)].join('')
 			// }
-			console.log('_path-->', _urn);
+			//~console.log('_path-->', _urn);
 			return self._escapePath((_location.length > 0) ? [_location,_urn].join('/') : _urn);
 		};
 
@@ -415,7 +427,7 @@ To-do:
 		// 	assertType(qryArgs, 'object', ' "qryArgs" must be an object !');
 
 		// 	_.each(_argsMap, function(pair) {
-		// 		var 
+		// 		var
 		// 			indexInPath = pair[0],
 		// 			name = pair[1],
 		// 			value = popAttr(argsToProcess, name);
@@ -450,9 +462,9 @@ To-do:
 			var _error;
 			try {
 				// Check authentication
-				if (!self._auth.currentUser) // Emulate HTTP 401: "Unathorized": 
+				if (!self._auth.currentUser) // Emulate HTTP 401: "Unathorized":
 					throw new FirebaseAuthError('Firebase requires authentication!', {code: 401});
-				
+
 				assertDefined(self._svcHandle,
 					'Cannot perform Firebase request before transport.init(fbConfig) call!');
 				return self[method](uri, rqOptions, data)
@@ -563,10 +575,10 @@ To-do:
 				o = rqOptions || {},
 				_d = assertDefined(data,
 					'FirebaseStorage.create() requires "data" argument!'),
-				file = assertDefined(_d.uploadData, 
+				file = assertDefined(_d.uploadData,
 					'FirebaseStorage.create() requires "data.uploadData" attribute!'),
 				onProgress = o.onProgress,
-				_m = assertDefined(data.metadata, 
+				_m = assertDefined(data.metadata,
 					'FirebaseStorage requires "data.metadata" attribute!'),
 				metadata =  encodeMetadata( _m, true),
 				fname,
@@ -576,8 +588,8 @@ To-do:
 			// sanitize "undefined" values:
 			metadata = _.removeUndefinedProps(metadata);
 
-			console.log('passed rqOptions: ', o);
-			console.log('file is File -->', file instanceof File);
+			//~console.log('passed rqOptions: ', o);
+			//~console.log('file is File -->', file instanceof File);
 
 			var progressCallback = function (snapshot) {
 					onProgress(snapshot.bytesTransferred, snapshot.totalBytes);
@@ -585,7 +597,7 @@ To-do:
 
 			// Reference about different options of the data type:
 			// https://firebase.google.com/docs/storage/web/upload-files#upload_files
-			
+
 			if (typeof file === 'string'){
 				if (typeof metadata.contentType === 'undefined' || metadata.contentType.match(/base64$/gi) || metadata.contentType.match(/base64url$/gi)) {
 					method = 'putString';
@@ -601,7 +613,7 @@ To-do:
 				throw new FirebaseStorageError('Upload object must be one of following types: string, File, Blob, Uint8Array!', {code: 400});
 			}
 
-			if (typeof metadata.contentType === 'undefined') 
+			if (typeof metadata.contentType === 'undefined')
 				throw new FirebaseStorageError('"contentType" in metadata must be specified explicitly!', {code: 400});
 
 			// var uploadTask = self.storage.ref(currentUser.uid + '/' + Date.now() + '/' + file.name)
@@ -609,7 +621,7 @@ To-do:
 
 			// validate "safe" name:
 			fname = uri.split('/').pop();
-			if (!fname.match(/[a-z0-9\.\-\_]/gi)) 
+			if (!fname.match(/[a-z0-9\.\-\_]/gi))
 				throw new FirebaseStorageError('Filename is not safe and contains prohibited characters: '+fname, {code: 400});
 
 			if (method === 'putString') {
@@ -678,14 +690,14 @@ To-do:
 
 		self.signIn = function (args) {
 			var p;
-			if (self.isSigned()) 
+			if (self.isSigned())
 				return Promise.resolve(self._auth.currentUser);
-			if (args.email) 
+			if (args.email)
 				p = self._auth.signInWithEmailAndPassword(args.email, args.password);
 			else
 				p = self._auth.signInAnonymously();
 			return p.then(function (response) {
-				return self._auth.currentUser; 
+				return self._auth.currentUser;
 			}).catch(function(error) {
 				var errorCode = error.code;
 				var errorMessage = error.message;
@@ -735,10 +747,10 @@ To-do:
 			// self = {
 			// 	methodsMap: function(argument) {
 			// 		// body...
-			// 	}				
+			// 	}
 			// };
 
-		console.log('Create FirebaseDB Instance...');
+		//~console.log('Create FirebaseDB Instance...');
 
 		// Firebase path can't contain ".", "#", "$", "[", or "]"":
 		self._escapePath = function (value) {
@@ -747,7 +759,7 @@ To-do:
 
 		// Firebase initialization:
 		self.init = function(fbConfig, appName) {
-			self._fbConfig = assertDefined(fbConfig, 
+			self._fbConfig = assertDefined(fbConfig,
 				'Firebase config attribute is missed in the transport.init(fbConfig) call!');
 			self._firebase = initFirebaseApp(self._fbConfig, appName);
 
@@ -801,7 +813,7 @@ To-do:
 			// sanitize "undefined" values:
 			data = _.removeUndefinedProps(data);
 
-			console.log('FirebaseDB->_doCreate', rqOptions, data);
+			//~console.log('FirebaseDB->_doCreate', rqOptions, data);
 			return self._svcHandle.ref(uri).set(data);
 		}
 
@@ -816,12 +828,12 @@ To-do:
 			// sanitize "undefined" values:
 			data = _.removeUndefinedProps(data);
 
-			return self._doRead(uri, rqOptions).then(function (snapshot) {
-				return _.deepExtend(snapshot, data)
-			}).then(function (data) {
-				return self._svcHandle.ref(uri).update(data);
-			})
-			// return self._svcHandle.ref(uri).update(data);
+			// return self._doRead(uri, rqOptions).then(function (snapshot) {
+			// 	return _.deepExtend(snapshot, data)
+			// }).then(function (data) {
+			// 	return self._svcHandle.ref(uri).update(data);
+			// })
+			return self._svcHandle.ref(uri).update(data);
 		}
 
 		/**
@@ -871,22 +883,24 @@ To-do:
 		return self;
 	}
 
-	console.log('IO.FIREBASE PASSED');
+	//~console.log('IO.FIREBASE PASSED');
 
 	return _.extend(IO, {
-
+		'initFirebaseApp': initFirebaseApp,
 		// Exceptions:
-		FirebaseError: FirebaseError,
-		FirebaseAuthError: FirebaseAuthError,
-		FirebaseStorageError: FirebaseStorageError,
-		FirebaseDBError: FirebaseDBError,
+		'FirebaseError': FirebaseError,
+		'FirebaseAuthError': FirebaseAuthError,
+		'FirebaseStorageError': FirebaseStorageError,
+		'FirebaseDBError': FirebaseDBError,
 
-		FirebaseUser: FirebaseUser,
+		'FirebaseUser': FirebaseUser,
 		// Here we re-defines IO.Auth factory:
-		Auth: FirebaseAuth,
+		'FirebaseAuth': FirebaseAuth,
+		// default factory for Auth:
+		'AuthFactory': FirebaseAuth,
 		// Export new transports (only for convenience, because these factories are registered with "schemes")
-		FirebaseStorage: FirebaseStorage,
-		FirebaseDB: FirebaseDB
+		'FirebaseStorage': FirebaseStorage,
+		'FirebaseDB': FirebaseDB
 	});
 
 }));

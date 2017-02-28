@@ -1,12 +1,12 @@
 'use strict'
 // unmock to use the actual implementation of sum
 
-jest.unmock('../../../vendor/underscore-min');
-jest.unmock('../underscore.ext');
+// jest.unmock(vendorRoot+modules_underscore);
+// jest.unmock('underscore');
+// jest.unmock('shared/underscore.ext');
 
-window._ = require('../../../vendor/underscore-min');
-window._ = require('../underscore.ext');
-window.$ = require('../../../vendor/jquery-1.11.3.min');
+window._ = require.requireActual('underscore.all');
+// window.$ = require('../../../vendor/jquery-1.11.3.min');
 
 
 describe('deepClone', () => {
@@ -131,7 +131,6 @@ describe('getQueryVariable', () => {
   it('After extending, nested objects should be an unique instance', () => {
 
   	var query = '?var1=1&var2=2&var3=3';
-  	console.log('query-->', query);
   	var value = _.getQueryVariable('var2', query);
 	expect(value).toBe('2');
   });
@@ -179,7 +178,6 @@ describe('createExceptionClass', () => {
 describe('Exception', () => {
   it('After extending, nested objects should be an unique instance', () => {
   	var error = _.Exception('Message', {name: 'TestType', code: 500});
-  	console.log('Custom Error -->', error);
 	expect(error).toEqual(jasmine.objectContaining({
 		message: 'Message', 
 		name: 'TestType', 

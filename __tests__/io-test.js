@@ -7,7 +7,7 @@ jest.unmock('../io'); // unmock to use the actual implementation of sum
 
 // const Promise = require('../../../vendor/es6-promise-min').Promise;
 window._ = require('../../../vendor/underscore-min');
-var u_ext = require('../underscore.ext');
+window._ = require('../underscore.ext');
 
 // console.log('u_ext:', u_ext);
 
@@ -296,6 +296,9 @@ describe('Joint', () => {
 
 		return Joint([t1,t2,t3])
 			.read('', {})
+			.then(function () {
+				expect(spy).not.toHaveBeenCalled()
+			})
 			.catch(function (responses) {
 				expect(responses).toEqual("transport-2/?read");
 				expect(spy).toHaveBeenCalled()
